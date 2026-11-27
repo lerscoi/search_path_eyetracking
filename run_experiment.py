@@ -22,7 +22,8 @@ FIX_MS = 3000             # fixation duration
 BG_COLOR = "#808080"
 FIX_COLOR = "#4d4d4d"
 CENTER_MARGIN = 40
-OUTPUT_FILE_TEMPLATE = "experiment_log_{participant}.csv"
+OUTPUT_DIR = Path("results")
+OUTPUT_FILE_TEMPLATE = "experiment_log_{participant}_{condition}.csv"
 STIM_FOLDERS = {"color": "color", "gray": "grayscale"}
 
 def show_text(canvas, lines, size=18, spacing=60):
@@ -51,7 +52,7 @@ def show_instructions(canvas, participant):
     show_text(canvas, [
         "Welcome!",
         "You will see a series of images. Each image appears for a brief period of time.",
-        "Look for the marker hidden in every image."
+        "Look for the marker hidden in every image.",
         "Between images, a fixation cross will appear on the left or right side.",
         "Please fixate the cross when shown.",
         "",
@@ -105,9 +106,10 @@ def show_image(canvas, order, state, log):
 
 def save_log(log, state):
     """Write the trial log to a CSV named by participant and condition."""
-    pd.DataFrame(log).to_csv(
-        OUTPUT_FILE_TEMPLATE.format(participant=state["participant"],
-                                    condition=state["condition"]), index=False)
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    output_file = OUTPUT_DIR / OUTPUT_FILE_TEMPLATE.format(participant=state["participant"], condition=state["condition"])
+    
+    pd.DataFrame(log).to_csv(output_file, index=False)
 
 def show_done(canvas):
     """Thank-you screen, then close."""
