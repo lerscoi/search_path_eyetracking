@@ -23,7 +23,7 @@ BG_COLOR = "#808080"
 FIX_COLOR = "#4d4d4d"
 CENTER_MARGIN = 40
 OUTPUT_FILE_TEMPLATE = "experiment_log_{participant}.csv"
-STIM_FOLDERS = {"color": "final_color", "gray": "final_gray"}
+STIM_FOLDERS = {"color": "color", "gray": "grayscale"}
 
 def show_text(canvas, lines, size=18, spacing=60):
     """Display instruction text centrally."""
