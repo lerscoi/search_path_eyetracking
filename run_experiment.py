@@ -9,6 +9,7 @@ import random
 import tkinter as tk
 from pathlib import Path
 import pandas as pd
+import hengam
 from PIL import Image, ImageTk
 
 root = tk.Tk()
@@ -22,8 +23,15 @@ FIX_MS = 3000             # fixation duration
 BG_COLOR = "#808080"
 FIX_COLOR = "#4d4d4d"
 CENTER_MARGIN = 40
-OUTPUT_FILE_TEMPLATE = "experiment_log_{participant}.csv"
+
+OUTPUT_FILE_TEMPLATE = "experiment_log__{participant}_{condition}.csv"
 STIM_FOLDERS = {"color": "color", "gray": "grayscale"}
+
+OUTPUT_DIR = Path("results")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+tracker = None
+all_samples = []
 
 def show_text(canvas, lines, size=18, spacing=60):
     """Display instruction text centrally."""
@@ -51,7 +59,7 @@ def show_instructions(canvas, participant):
     show_text(canvas, [
         "Welcome!",
         "You will see a series of images. Each image appears for a brief period of time.",
-        "Look for the marker hidden in every image."
+        "Look for the marker hidden in every image.",
         "Between images, a fixation cross will appear on the left or right side.",
         "Please fixate the cross when shown.",
         "",
@@ -86,13 +94,14 @@ def show_fixation(canvas, next_fn):
 
 def show_image(canvas, order, state, log):
     """Show one centered image for IMG_MS."""
-    global photo
+    global photo, tracker, all_samples
     canvas.delete("all")
     if state["i"] >= len(order):
         save_log(log, state)
         show_done(canvas)
         return
     path, _ = order[state["i"]]
+    image_name = path.stem
     photo = ImageTk.PhotoImage(Image.open(path).convert("RGB"))
     item = canvas.create_image(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, anchor="center", image=photo)
     x, y = canvas.coords(item)
@@ -100,14 +109,41 @@ def show_image(canvas, order, state, log):
     log.append({"order": state["i"] + 1, "theme": path.stem,
                 "img_x_px": x - w / 2, "img_y_px": y - h / 2,
                 "disp_w": w, "disp_h": h})
+
+    # Start gaze recording when image appears
+    tracker.clear()
+    tracker.start_recording()
+    
     state["i"] += 1
-    root.after(IMG_MS, lambda: show_fixation(canvas, lambda: show_image(canvas, order, state, log)))
+    root.after(IMG_MS, lambda: finish_image(canvas, order, state, log, image_name))
+
+def finish_image(canvas, order, state, log, image_name):
+    """Stop recording and collect gaze samples after image disappears."""
+    global tracker, all_samples
+
+    tracker.stop_recording()
+
+    samples = pd.DataFrame(tracker.get_samples())
+    samples["image"] = image_name
+    all_samples.append(samples)
+
+    show_fixation(canvas, lambda: show_image(canvas, order, state, log))
+
+def save_gaze_data(state):
+    """Save all gaze samples to a CSV named by participant."""
+    global all_samples
+
+    df = pd.concat(all_samples, ignore_index=True)
+    output_file = OUTPUT_DIR / (f"gaze_data_{state['participant']}.csv")
+    df.to_csv(output_file, index=False)
+
+    print(f"Gaze data saved to: {output_file}")
 
 def save_log(log, state):
     """Write the trial log to a CSV named by participant and condition."""
-    pd.DataFrame(log).to_csv(
-        OUTPUT_FILE_TEMPLATE.format(participant=state["participant"],
-                                    condition=state["condition"]), index=False)
+    output_file = OUTPUT_DIR / OUTPUT_FILE_TEMPLATE.format(participant=state["participant"], condition=state["condition"])
+    
+    pd.DataFrame(log).to_csv(output_file, index=False)
 
 def show_done(canvas):
     """Thank-you screen, then close."""
@@ -115,11 +151,20 @@ def show_done(canvas):
     show_text(canvas, ["Done. Thank you!"], size=28, spacing=0)
     root.after(3000, root.destroy)
 
-root.configure(bg=BG_COLOR, cursor="none")
-canvas = tk.Canvas(root, bg=BG_COLOR, highlightthickness=0, cursor="none")
-canvas.pack(fill="both", expand=True)
-root.bind("<Escape>", lambda e: root.destroy())
-root.focus_set()
+def main():
+    global tracker
 
-ask_participant(canvas)
-root.mainloop()
+    root.configure(bg=BG_COLOR, cursor="none")
+    canvas = tk.Canvas(root, bg=BG_COLOR, highlightthickness=0, cursor="none")
+    canvas.pack(fill="both", expand=True)
+    root.bind("<Escape>", lambda e: root.destroy())
+    root.focus_set()
+
+    with hengam.EyeTracker(SCREEN_WIDTH, SCREEN_HEIGHT) as eye_tracker:
+        tracker = eye_tracker
+
+        ask_participant(canvas)
+        root.mainloop()
+
+if __name__ == "__main__":
+    main()
