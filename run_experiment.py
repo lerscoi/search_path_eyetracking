@@ -98,6 +98,7 @@ def show_image(canvas, order, state, log):
     canvas.delete("all")
     if state["i"] >= len(order):
         save_log(log, state)
+        save_gaze_data(state)
         show_done(canvas)
         return
     path, _ = order[state["i"]]
